@@ -12,11 +12,5 @@
     "react": "19.1.4",
     "react-dom": "19.1.4",
     "maplibre-gl": "^4.7.1"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
   }
 }
