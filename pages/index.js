@@ -1,4 +1,5 @@
 import dynamic from 'next/dynamic'
+import Head from 'next/head'
 
 const MapView = dynamic(() => import('../components/MapView'), {
   ssr: false,
@@ -20,5 +21,16 @@ const MapView = dynamic(() => import('../components/MapView'), {
 })
 
 export default function Home() {
-  return <MapView />
+  return (
+    <>
+      <Head>
+        <title>NEXUS — Infrastructure Terminal</title>
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+        />
+      </Head>
+      <MapView />
+    </>
+  )
 }
