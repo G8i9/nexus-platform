@@ -1,7 +1,5 @@
-js
 import { useEffect, useRef, useState } from 'react'
 
-// ── River metadata ──────────────────────────────────────────
 const RIVERS = [
   {
     id: 'colorado',
@@ -51,23 +49,22 @@ const RIVERS = [
     use: 'Agriculture · Municipal',
     length: '1,896 mi',
     states: 'CO · NM · TX · Mexico',
-    context: 'Declared legally "dead" at its mouth in 2001. Intermittent flow now reaches the Gulf only in wet years.',
+    context: 'Declared legally dead at its mouth in 2001. Flow reaches the Gulf only in wet years.',
   },
 ]
 
 const STATUS = {
-  normal:   { color: '#22c55e', glow: '#22c55e88', label: 'Normal Flow' },
-  stressed: { color: '#f59e0b', glow: '#f59e0b88', label: 'Below Average' },
-  critical: { color: '#ef4444', glow: '#ef444488', label: 'Critically Low' },
+  normal:   { color: '#22c55e', label: 'Normal Flow' },
+  stressed: { color: '#f59e0b', label: 'Below Average' },
+  critical: { color: '#ef4444', label: 'Critically Low' },
 }
 
-// ── GeoJSON river coordinates ───────────────────────────────
 const RIVER_GEOJSON = {
   type: 'FeatureCollection',
   features: [
     {
       type: 'Feature',
-      properties: { id: 'colorado', status: 'critical', color: '#ef4444' },
+      properties: { id: 'colorado', color: '#ef4444' },
       geometry: {
         type: 'LineString',
         coordinates: [
@@ -81,7 +78,7 @@ const RIVER_GEOJSON = {
     },
     {
       type: 'Feature',
-      properties: { id: 'mississippi', status: 'normal', color: '#22c55e' },
+      properties: { id: 'mississippi', color: '#22c55e' },
       geometry: {
         type: 'LineString',
         coordinates: [
@@ -95,7 +92,7 @@ const RIVER_GEOJSON = {
     },
     {
       type: 'Feature',
-      properties: { id: 'missouri', status: 'stressed', color: '#f59e0b' },
+      properties: { id: 'missouri', color: '#f59e0b' },
       geometry: {
         type: 'LineString',
         coordinates: [
@@ -111,7 +108,7 @@ const RIVER_GEOJSON = {
     },
     {
       type: 'Feature',
-      properties: { id: 'columbia', status: 'normal', color: '#22c55e' },
+      properties: { id: 'columbia', color: '#22c55e' },
       geometry: {
         type: 'LineString',
         coordinates: [
@@ -125,7 +122,7 @@ const RIVER_GEOJSON = {
     },
     {
       type: 'Feature',
-      properties: { id: 'riogrand', status: 'critical', color: '#ef4444' },
+      properties: { id: 'riogrand', color: '#ef4444' },
       geometry: {
         type: 'LineString',
         coordinates: [
@@ -146,8 +143,7 @@ const LAYERS_DEFAULT = [
   { label: 'Power Grid', on: false },
 ]
 
-// ── Component ───────────────────────────────────────────────
-export default function Home() {
+export default function MapView() {
   const mapContainer = useRef(null)
   const mapRef       = useRef(null)
   const [sheet, setSheet]         = useState(null)
@@ -167,7 +163,6 @@ export default function Home() {
         center: [-96.0, 38.5],
         zoom: 3.4,
         attributionControl: false,
-        pitchWithRotate: false,
       })
 
       mapRef.current = map
@@ -178,13 +173,11 @@ export default function Home() {
       )
 
       map.on('load', () => {
-        // ── Add river source ──
         map.addSource('rivers', {
           type: 'geojson',
           data: RIVER_GEOJSON,
         })
 
-        // ── Outer glow layer ──
         map.addLayer({
           id: 'rivers-glow',
           type: 'line',
@@ -197,48 +190,23 @@ export default function Home() {
           },
         })
 
-        // ── Mid glow layer ──
-        map.addLayer({
-          id: 'rivers-mid',
-          type: 'line',
-          source: 'rivers',
-          paint: {
-            'line-color': ['get', 'color'],
-            'line-width': 5,
-            'line-opacity': 0.35,
-            'line-blur': 2,
-          },
-        })
-
-        // ── Core river line ──
         map.addLayer({
           id: 'rivers-core',
           type: 'line',
           source: 'rivers',
           paint: {
             'line-color': ['get', 'color'],
-            'line-width': 2,
+            'line-width': 2.5,
             'line-opacity': 1.0,
           },
         })
 
-        // ── Tap/click handler on river lines ──
-        map.on('click', 'rivers-core', (e) => {
-          const props = e.features[0].properties
-          const river = RIVERS.find(r => r.id === props.id)
-          if (river) {
-            setSheet(river)
-            setSheetFull(false)
-          }
-        })
-
-        // ── Wider invisible hit area for easier tapping ──
         map.addLayer({
           id: 'rivers-hit',
           type: 'line',
           source: 'rivers',
           paint: {
-            'line-color': 'transparent',
+            'line-color': '#ffffff',
             'line-width': 20,
             'line-opacity': 0,
           },
@@ -247,13 +215,9 @@ export default function Home() {
         map.on('click', 'rivers-hit', (e) => {
           const props = e.features[0].properties
           const river = RIVERS.find(r => r.id === props.id)
-          if (river) {
-            setSheet(river)
-            setSheetFull(false)
-          }
+          if (river) { setSheet(river); setSheetFull(false) }
         })
 
-        map.getCanvas().style.cursor = ''
         map.on('mouseenter', 'rivers-hit', () => {
           map.getCanvas().style.cursor = 'pointer'
         })
@@ -276,37 +240,34 @@ export default function Home() {
   const toggleLayer = (i) =>
     setLayers(prev => prev.map((l, idx) => idx === i ? { ...l, on: !l.on } : l))
 
-  const openSheet  = (river) => { setSheet(river); setSheetFull(false) }
-  const closeSheet = ()      => { setSheet(null);  setSheetFull(false) }
+  const closeSheet = () => { setSheet(null); setSheetFull(false) }
 
   return (
     <>
-        <style>{`
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { background: #060810; overflow: hidden; }
+      <style>{`
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #060810; overflow: hidden; }
+        .maplibregl-canvas {
+          filter: brightness(0.38) saturate(0.5) hue-rotate(200deg);
+        }
+        @keyframes slideUp {
+          from { transform: translateY(100%); opacity: 0; }
+          to   { transform: translateY(0); opacity: 1; }
+        }
+        .sheet-enter { animation: slideUp 0.3s cubic-bezier(0.32,0.72,0,1); }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+        .pulse { animation: pulse 2s ease-in-out infinite; }
+        ::-webkit-scrollbar { width: 0; }
+      `}</style>
 
-          .maplibregl-canvas {
-            filter: brightness(0.38) saturate(0.5) hue-rotate(200deg);
-          }
+      <div style={{
+        height: '100vh', width: '100vw',
+        position: 'relative', fontFamily: 'monospace', color: 'white',
+      }}>
 
-          @keyframes slideUp {
-            from { transform: translateY(100%); opacity: 0; }
-            to   { transform: translateY(0);    opacity: 1; }
-          }
-          .sheet-enter { animation: slideUp 0.32s cubic-bezier(0.32,0.72,0,1); }
-
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50%       { opacity: 0.4; }
-          }
-          .pulse { animation: pulse 2s ease-in-out infinite; }
-
-          ::-webkit-scrollbar { width: 0; }
-        `}</style>
-
-      <div style={{ height: '100vh', width: '100vw', position: 'relative', fontFamily: 'monospace', color: 'white' }}>
-
-        {/* MAP */}
         <div ref={mapContainer} style={{ position: 'absolute', inset: 0 }} />
 
         {/* NAVBAR */}
@@ -324,11 +285,10 @@ export default function Home() {
             </span>
             <span style={{
               fontSize: '8px', letterSpacing: '2px', color: '#3b82f6',
-              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+              background: 'rgba(59,130,246,0.1)',
+              border: '1px solid rgba(59,130,246,0.3)',
               borderRadius: '4px', padding: '2px 6px',
-            }}>
-              WATER MODULE
-            </span>
+            }}>WATER MODULE</span>
           </div>
           <div style={{ display: 'flex', gap: '18px', fontSize: '11px', letterSpacing: '1.5px' }}>
             <span style={{ color: '#60a5fa' }}>MAP</span>
@@ -373,25 +333,21 @@ export default function Home() {
           ))}
         </div>
 
-        {/* RIVER LEGEND — bottom-left, above status bar */}
+        {/* RIVER LEGEND */}
         <div style={{
           position: 'absolute', bottom: '36px', left: '12px', zIndex: 100,
           display: 'flex', flexDirection: 'column', gap: '5px',
         }}>
           {RIVERS.map((r) => (
-            <button key={r.id} onClick={() => openSheet(r)} style={{
+            <button key={r.id} onClick={() => { setSheet(r); setSheetFull(false) }} style={{
               background: 'rgba(6,10,20,0.82)',
               backdropFilter: 'blur(8px)',
               border: `1px solid ${STATUS[r.status].color}33`,
               borderLeft: `2px solid ${STATUS[r.status].color}`,
               borderRadius: '5px', padding: '5px 10px',
-              color: '#64748b', fontSize: '10px', letterSpacing: '0.5px',
-              cursor: 'pointer', textAlign: 'left',
-              transition: 'color 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.color = '#cbd5e1'}
-              onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-            >
+              color: '#64748b', fontSize: '10px',
+              cursor: 'pointer', textAlign: 'left', letterSpacing: '0.5px',
+            }}>
               <span style={{
                 display: 'inline-block', width: '6px', height: '6px',
                 borderRadius: '50%', background: STATUS[r.status].color,
@@ -403,13 +359,13 @@ export default function Home() {
           ))}
         </div>
 
-        {/* MAP READY HINT */}
+        {/* HINT */}
         {mapReady && !sheet && (
           <div style={{
-            position: 'absolute', top: '58px', left: '12px', zIndex: 100,
+            position: 'absolute', top: '62px', left: '12px', zIndex: 100,
             fontSize: '9px', letterSpacing: '1.5px', color: '#1e3a5f',
           }}>
-            TAP A RIVER LINE OR NAME TO EXPLORE
+            TAP A RIVER TO EXPLORE
           </div>
         )}
 
@@ -425,23 +381,21 @@ export default function Home() {
             transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
-            {/* Handle */}
             <div onClick={() => setSheetFull(f => !f)} style={{
-              padding: '10px 0 6px', display: 'flex', justifyContent: 'center',
-              cursor: 'pointer', flexShrink: 0,
+              padding: '10px 0 6px', display: 'flex',
+              justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
             }}>
               <div style={{ width: '32px', height: '3px', borderRadius: '2px', background: '#1e293b' }} />
             </div>
 
             <div style={{ padding: '0 18px 24px', overflowY: 'auto', flex: 1 }}>
 
-              {/* Header */}
               <div style={{
                 display: 'flex', justifyContent: 'space-between',
                 alignItems: 'flex-start', marginBottom: '14px',
               }}>
                 <div>
-                  <div style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '0.5px', color: '#f1f5f9' }}>
+                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9' }}>
                     {sheet.name}
                   </div>
                   <div style={{ fontSize: '9px', color: '#1e3a5f', letterSpacing: '2.5px', marginTop: '3px' }}>
@@ -450,38 +404,35 @@ export default function Home() {
                 </div>
                 <button onClick={closeSheet} style={{
                   background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid #1e293b',
-                  color: '#475569', fontSize: '14px',
-                  cursor: 'pointer', padding: '4px 8px', borderRadius: '6px',
+                  border: '1px solid #1e293b', color: '#475569',
+                  fontSize: '14px', cursor: 'pointer',
+                  padding: '4px 8px', borderRadius: '6px',
                 }}>✕</button>
               </div>
 
-              {/* Status Gauge */}
               <div style={{
                 background: `${STATUS[sheet.status].color}0d`,
                 border: `1px solid ${STATUS[sheet.status].color}33`,
                 borderRadius: '8px', padding: '10px 13px',
                 marginBottom: '12px',
-                display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between',
+                display: 'flex', alignItems: 'center', gap: '9px',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                  <div className="pulse" style={{
-                    width: '9px', height: '9px', borderRadius: '50%',
-                    background: STATUS[sheet.status].color,
-                    boxShadow: `0 0 10px ${STATUS[sheet.status].color}`,
-                  }} />
-                  <span style={{
-                    fontSize: '11px', color: STATUS[sheet.status].color,
-                    letterSpacing: '2px', fontWeight: 600,
-                  }}>
-                    {STATUS[sheet.status].label.toUpperCase()}
-                  </span>
-                </div>
-                <span style={{ fontSize: '10px', color: '#334155' }}>{sheet.length}</span>
+                <div className="pulse" style={{
+                  width: '9px', height: '9px', borderRadius: '50%',
+                  background: STATUS[sheet.status].color,
+                  boxShadow: `0 0 10px ${STATUS[sheet.status].color}`,
+                }} />
+                <span style={{
+                  fontSize: '11px', color: STATUS[sheet.status].color,
+                  letterSpacing: '2px', fontWeight: 600,
+                }}>
+                  {STATUS[sheet.status].label.toUpperCase()}
+                </span>
+                <span style={{ fontSize: '10px', color: '#334155', marginLeft: 'auto' }}>
+                  {sheet.length}
+                </span>
               </div>
 
-              {/* Context Metric */}
               <div style={{
                 fontSize: '12px', color: '#64748b', lineHeight: '1.7',
                 marginBottom: '13px', padding: '10px 13px',
@@ -491,7 +442,6 @@ export default function Home() {
                 {sheet.context}
               </div>
 
-              {/* Stats Row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '7px', marginBottom: '13px' }}>
                 {[
                   { label: 'POPULATION', value: sheet.population },
@@ -501,8 +451,7 @@ export default function Home() {
                   <div key={stat.label} style={{
                     background: 'rgba(255,255,255,0.02)',
                     border: '1px solid rgba(255,255,255,0.05)',
-                    borderRadius: '7px', padding: '9px 8px',
-                    textAlign: 'center',
+                    borderRadius: '7px', padding: '9px 8px', textAlign: 'center',
                   }}>
                     <div style={{ fontSize: '7px', color: '#1e3a5f', letterSpacing: '1.5px', marginBottom: '4px' }}>
                       {stat.label}
@@ -517,7 +466,6 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Primary Uses */}
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ fontSize: '8px', color: '#1e3a5f', letterSpacing: '2.5px', marginBottom: '8px' }}>
                   PRIMARY USES
@@ -534,7 +482,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Advanced Tier Lock */}
               <div style={{
                 background: 'rgba(239,68,68,0.04)',
                 border: '1px solid rgba(239,68,68,0.18)',
@@ -546,7 +493,7 @@ export default function Home() {
                     🔴 ADVANCED DATA
                   </div>
                   <div style={{ fontSize: '9px', color: '#334155', lineHeight: '1.5' }}>
-                    Water rights · Senior/Junior allocation<br/>
+                    Water rights · Senior/Junior allocation<br />
                     Regulatory friction · 50-year trend charts
                   </div>
                 </div>
@@ -569,9 +516,7 @@ export default function Home() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <span>NEXUS v0.1 · PHASE 1</span>
-          <span style={{ color: '#22c55e', letterSpacing: '1px' }}>
-            ● LIVE
-          </span>
+          <span style={{ color: '#22c55e' }}>● LIVE</span>
           <span>5 RIVERS INDEXED</span>
         </div>
 
