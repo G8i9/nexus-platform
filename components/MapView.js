@@ -1,6 +1,5 @@
 js
 import { useEffect, useRef, useState } from 'react'
-import Head from 'next/head'
 
 // ── River metadata ──────────────────────────────────────────
 const RIVERS = [
@@ -282,9 +281,6 @@ export default function Home() {
 
   return (
     <>
-      <Head>
-        <title>NEXUS — Infrastructure Terminal</title>
-        <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
         <style>{`
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { background: #060810; overflow: hidden; }
@@ -307,7 +303,6 @@ export default function Home() {
 
           ::-webkit-scrollbar { width: 0; }
         `}</style>
-      </Head>
 
       <div style={{ height: '100vh', width: '100vw', position: 'relative', fontFamily: 'monospace', color: 'white' }}>
 
