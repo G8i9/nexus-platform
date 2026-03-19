@@ -249,7 +249,7 @@ export default function MapView() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #060810; overflow: hidden; }
         .maplibregl-canvas {
-          filter: brightness(0.25) saturate(0.5) hue-rotate(200deg);
+          filter: brightness(0.25) saturate(0.3) hue-rotate(200deg);
         }
         @keyframes slideUp {
           from { transform: translateY(100%); opacity: 0; }
