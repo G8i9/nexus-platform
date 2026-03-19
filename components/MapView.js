@@ -161,7 +161,7 @@ export default function MapView() {
         container: mapContainer.current,
         style: 'https://tiles.openfreemap.org/styles/liberty',
         center: [-96.0, 38.5],
-        maxBounds: [[-180, 15], [-60, 72]]
+        maxBounds: [[-180, 15], [-60, 72]],
         zoom: 3.4,
         attributionControl: false,
       })
