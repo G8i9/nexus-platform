@@ -176,9 +176,9 @@ export default function MapView() {
       map.on('load', () => {
 
         // Make state borders visible and bright
-      map.setPaintProperty('boundary-state', 'line-color', '#334155')
-      map.setPaintProperty('boundary-state', 'line-width', 1.2)
-      map.setPaintProperty('boundary-state', 'line-opacity', 0.9)
+      map.setPaintProperty('boundary-state', 'line-color', '#ffffff')
+      map.setPaintProperty('boundary-state', 'line-width', 2)
+      map.setPaintProperty('boundary-state', 'line-opacity', 1)
 
       // Optionally dim country fills so states read clearly
       map.setPaintProperty('landuse', 'fill-opacity', 0)
