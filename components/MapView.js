@@ -182,6 +182,7 @@ export default function MapView() {
 
       // Optionally dim country fills so states read clearly
       map.setPaintProperty('landuse', 'fill-opacity', 0)
+      map.moveLayer('boundary-state');
         
         map.addSource('rivers', {
           type: 'geojson',
