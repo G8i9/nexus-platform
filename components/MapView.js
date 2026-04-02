@@ -175,14 +175,7 @@ export default function MapView() {
 
       map.on('load', () => {
 
-        // Make state borders visible and bright
-      map.setPaintProperty('boundary-state', 'line-color', '#ffffff')
-      map.setPaintProperty('boundary-state', 'line-width', 2)
-      map.setPaintProperty('boundary-state', 'line-opacity', 1)
-
-      // Optionally dim country fills so states read clearly
-      map.setPaintProperty('landuse', 'fill-opacity', 0)
-      map.moveLayer('boundary-state');
+        console.log("ALL LAYER IDS:", map.getStyle().layers.map(l => l.id));
         
         map.addSource('rivers', {
           type: 'geojson',
