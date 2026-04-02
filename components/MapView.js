@@ -174,17 +174,14 @@ export default function MapView() {
       )
 
       map.on('load', () => {
+
+map.setPaintProperty('boundary-state', 'line-color', '#334155')
+map.setPaintProperty('boundary-state', 'line-width', 1.2)
+map.setPaintProperty('boundary-state', 'line-opacity', 0.9)
+        
         map.addSource('rivers', {
           type: 'geojson',
-          data: RIVER_GEOJSON,
-        
-        // Make state borders visible and bright
-        map.setPaintProperty('boundary-state', 'line-color', '#334155')
-        map.setPaintProperty('boundary-state', 'line-width', 1.2)
-        map.setPaintProperty('boundary-state', 'line-opacity', 0.9)
-
-        // Optionally dim country fills so states read clearly
-        map.setPaintProperty('landuse', 'fill-opacity', 0)})
+          data: RIVER_GEOJSON,})
 
         map.addLayer({
           id: 'rivers-glow',
