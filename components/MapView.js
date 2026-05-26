@@ -142,15 +142,48 @@ const STATUS = {
   critical: { color: '#ef4444', label: 'Critically Low' },
 }
 
-const NONE_FILTER = ['==',
-  ['coalesce', ['get', 'name_en'], ['get', 'name']], '__none__'
-]
-
+const NONE_FILTER = ['==', ['get', '_uid'], -1]
 const LAYERS_DEFAULT = [
   { label: 'Rivers', on: true  },
   { label: 'Lakes',  on: true  },
   { label: 'Power Grid', on: false },
 ]
+
+// Check if coordinate falls in US (continental, Alaska, or Hawaii)
+function inUS(lng, lat) {
+  const continental = lng >= -125 && lng <= -65  && lat >= 24   && lat <= 50
+  const alaska      = lng >= -180 && lng <= -130 && lat >= 54   && lat <= 72
+  const hawaii      = lng >= -162 && lng <= -154 && lat >= 18   && lat <= 23
+  return continental || alaska || hawaii
+}
+
+// Add sequential _uid to each feature
+function addUIDs(geojson) {
+  return {
+    ...geojson,
+    features: geojson.features.map((f, i) => ({
+      ...f,
+      id: i,
+      properties: { ...f.properties, _uid: i },
+    })),
+  }
+}
+
+// Filter GeoJSON to US region
+function filterToUS(geo, minArea) {
+  return {
+    ...geo,
+    features: geo.features.filter(f => {
+      if (!f.geometry) return false
+      let c = f.geometry.coordinates
+      while (Array.isArray(c[0])) c = c[0]
+      const [lng, lat] = c
+      if (!inUS(lng, lat)) return false
+      if (minArea != null) return (f.properties.area_sqkm || 0) >= minArea
+      return (f.properties.scalerank || 10) <= 7
+    }),
+  }
+}
 
 export default function MapView() {
   const mapContainer   = useRef(null)
@@ -173,9 +206,10 @@ export default function MapView() {
       const map = new maplibregl.Map({
         container: mapContainer.current,
         style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: [-96.0, 38.5],
-        zoom: 3.4,
-        maxBounds: [[-180, 15], [-60, 72]],
+        // Center shifted slightly west + lower zoom to show full US inc. Hawaii
+        center: [-100.0, 37.0],
+        zoom: 2.9,
+        maxBounds: [[-180, 15], [-60, 75]],
         attributionControl: false,
       })
       mapRef.current = map
@@ -188,44 +222,20 @@ export default function MapView() {
       map.on('load', async () => {
         if (!mounted) return
 
-        // ── DARK OVERLAY — sits above basemap, below all data ──────────
-        // This darkens the map WITHOUT affecting our river/lake layers
+        // Dark world overlay — sits above basemap, below our data
         map.addSource('world-overlay', {
           type: 'geojson',
           data: {
-            type: 'Feature',
-            properties: {},
+            type: 'Feature', properties: {},
             geometry: {
               type: 'Polygon',
-              coordinates: [[
-                [-180, -85], [-180, 85], [180, 85], [180, -85], [-180, -85]
-              ]],
+              coordinates: [[[-180,-85],[-180,85],[180,85],[180,-85],[-180,-85]]],
             },
           },
         })
         map.addLayer({
-          id: 'dark-overlay',
-          type: 'fill',
-          source: 'world-overlay',
-          paint: {
-            'fill-color': '#020810',
-            'fill-opacity': 0.83,
-          },
-        })
-
-        // ── FILTER TO US ────────────────────────────────────────────────
-        const toUS = (geo, minArea) => ({
-          ...geo,
-          features: geo.features.filter(f => {
-            if (!f.geometry) return false
-            let c = f.geometry.coordinates
-            while (Array.isArray(c[0])) c = c[0]
-            const [lng, lat] = c
-            const inUS = lng >= -178 && lng <= -60 && lat >= 15 && lat <= 72
-            if (!inUS) return false
-            if (minArea != null) return (f.properties.area_sqkm || 0) >= minArea
-            return (f.properties.scalerank || 10) <= 7
-          }),
+          id: 'dark-overlay', type: 'fill', source: 'world-overlay',
+          paint: { 'fill-color': '#020810', 'fill-opacity': 0.82 },
         })
 
         try {
@@ -234,93 +244,72 @@ export default function MapView() {
             fetch('/data/lakes.geojson'),
           ])
           if (!mounted) return
-          const rivers = toUS(await rRes.json(), null)
-          const lakes  = toUS(await lRes.json(), 20)
 
-          // ── LAKES ────────────────────────────────────────────────────
+          const rivers = addUIDs(filterToUS(await rRes.json(), null))
+          const lakes  = addUIDs(filterToUS(await lRes.json(), 1))
+
+          // ── LAKES ───────────────────────────────────────────────
           map.addSource('lakes', { type: 'geojson', data: lakes })
 
           map.addLayer({
-            id: 'lakes-fill',
-            type: 'fill',
-            source: 'lakes',
+            id: 'lakes-fill', type: 'fill', source: 'lakes',
             paint: {
               'fill-color': '#0369a1',
               'fill-opacity': [
                 'interpolate', ['linear'],
                 ['coalesce', ['get', 'area_sqkm'], 100],
-                20,    0.45,
-                1000,  0.58,
-                10000, 0.70,
-                50000, 0.82,
+                1,     0.40,
+                500,   0.55,
+                5000,  0.68,
+                50000, 0.80,
               ],
             },
           })
 
           map.addLayer({
-            id: 'lakes-border',
-            type: 'line',
-            source: 'lakes',
-            paint: {
-              'line-color': '#38bdf8',
-              'line-width': 1.2,
-              'line-opacity': 0.85,
-            },
+            id: 'lakes-border', type: 'line', source: 'lakes',
+            paint: { 'line-color': '#38bdf8', 'line-width': 1.2, 'line-opacity': 0.80 },
           })
 
           map.addLayer({
-            id: 'lakes-selected',
-            type: 'fill',
-            source: 'lakes',
+            id: 'lakes-selected', type: 'fill', source: 'lakes',
             filter: NONE_FILTER,
-            paint: {
-              'fill-color': '#38bdf8',
-              'fill-opacity': 0.38,
-            },
+            paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.35 },
           })
 
-          // ── RIVERS ───────────────────────────────────────────────────
+          // ── RIVERS ──────────────────────────────────────────────
           map.addSource('rivers', { type: 'geojson', data: rivers })
 
-          // Ambient glow (always on)
+          // Ambient glow
           map.addLayer({
-            id: 'rivers-glow',
-            type: 'line',
-            source: 'rivers',
+            id: 'rivers-glow', type: 'line', source: 'rivers',
             paint: {
               'line-color': '#38bdf8',
-              'line-width': [
-                'interpolate', ['linear'],
-                ['coalesce', ['get', 'strokeweig'], 1],
-                0.1, 8, 5, 22, 10, 38,
-              ],
-              'line-opacity': 0.18,
-              'line-blur': 6,
+              'line-width': ['interpolate', ['linear'], ['coalesce', ['get', 'strokeweig'], 1],
+                0.1, 6, 5, 18, 10, 32],
+              'line-opacity': 0.16,
+              'line-blur': 5,
             },
           })
 
-          // Core visible line
+          // Core line — color scales from light to deep blue by discharge weight
           map.addLayer({
-            id: 'rivers-core',
-            type: 'line',
-            source: 'rivers',
+            id: 'rivers-core', type: 'line', source: 'rivers',
             paint: {
-              'line-color': [
-                'interpolate', ['linear'],
+              'line-color': ['interpolate', ['linear'],
                 ['coalesce', ['get', 'strokeweig'], 1],
-                0.1, '#7dd3fc',
-                2,   '#38bdf8',
-                4,   '#0ea5e9',
-                7,   '#0284c7',
-                10,  '#0369a1',
+                0.1, '#bae6fd',   // very light blue — small streams
+                1.5, '#7dd3fc',   // sky blue
+                3,   '#38bdf8',   // vivid cyan-blue
+                6,   '#0ea5e9',   // strong blue
+                10,  '#0369a1',   // deep navy blue — major rivers
               ],
-              'line-width': [
-                'interpolate', ['linear'],
+              'line-width': ['interpolate', ['linear'],
                 ['coalesce', ['get', 'strokeweig'], 1],
-                0.1, 1.0,
-                2,   2.0,
-                5,   3.2,
-                10,  5.0,
+                0.1, 0.8,
+                2,   1.8,
+                5,   3.0,
+                10,  4.8,
               ],
               'line-opacity': 1.0,
             },
@@ -328,129 +317,80 @@ export default function MapView() {
 
           // Wide invisible tap target
           map.addLayer({
-            id: 'rivers-hit',
-            type: 'line',
-            source: 'rivers',
+            id: 'rivers-hit', type: 'line', source: 'rivers',
+            paint: { 'line-color': '#ffffff', 'line-width': 24, 'line-opacity': 0 },
+          })
+
+          // Selected river — sharp bright highlight on the clicked segment only
+          map.addLayer({
+            id: 'rivers-selected', type: 'line', source: 'rivers',
+            filter: NONE_FILTER,
             paint: {
               'line-color': '#ffffff',
-              'line-width': 24,
-              'line-opacity': 0,
+              'line-width': 3.5,
+              'line-opacity': 0.85,
             },
           })
 
-          // Supply corridor glow (activates on selection)
-          map.addLayer({
-            id: 'rivers-supply',
-            type: 'line',
-            source: 'rivers',
-            filter: NONE_FILTER,
-            paint: {
-              'line-color': '#38bdf8',
-              'line-width': 120,
-              'line-opacity': 0.12,
-              'line-blur': 40,
-            },
-          })
-
-          // Sharp selected highlight
-          map.addLayer({
-            id: 'rivers-selected',
-            type: 'line',
-            source: 'rivers',
-            filter: NONE_FILTER,
-            paint: {
-              'line-color': '#7dd3fc',
-              'line-width': 4,
-              'line-opacity': 0.9,
-            },
-          })
-
-          // ── CLICK HANDLERS ───────────────────────────────────────────
-          const nameOf = p => p.name_en || p.name || p.namealt || null
-
-          const applyRiverFilter = (name) => {
-            const f = ['==',
-              ['coalesce', ['get', 'name_en'], ['get', 'name']], name
-            ]
-            map.setFilter('rivers-supply',   f)
-            map.setFilter('rivers-selected', f)
-            map.setFilter('lakes-selected', NONE_FILTER)
-          }
-
-          const applyLakeFilter = (name) => {
-            const f = ['==',
-              ['coalesce', ['get', 'name_en'], ['get', 'name']], name
-            ]
-            map.setFilter('lakes-selected', f)
-            map.setFilter('rivers-supply',   NONE_FILTER)
-            map.setFilter('rivers-selected', NONE_FILTER)
-          }
-
-          const selectRiver = (e) => {
-            const name = nameOf(e.features[0].properties)
-            if (!name) return
-            applyRiverFilter(name)
-            const meta = RIVER_META[name]
-            setSheetType('river')
-            setSupplyActive(true)
-            setSheet(meta
-              ? { ...meta, name }
-              : {
-                  name, status: 'normal', population: '—',
-                  length: '—', states: '—', use: '—',
-                  context: `${name} — data being integrated into NEXUS.`,
-                }
-            )
-            setSheetFull(false)
-          }
-
-          const selectLake = (e) => {
-            const name = nameOf(e.features[0].properties)
-            if (!name) return
-            applyLakeFilter(name)
-            const meta = LAKE_META[name]
-            setSheetType('lake')
-            setSupplyActive(true)
-            setSheet(meta
-              ? { ...meta, name }
-              : {
-                  name, status: 'normal', area: '—',
-                  states: '—', use: '—',
-                  context: `${name} — data being integrated into NEXUS.`,
-                }
-            )
-            setSheetFull(false)
-          }
-
-          map.on('click', 'rivers-hit',  selectRiver)
-          map.on('click', 'rivers-core', selectRiver)
-          map.on('click', 'lakes-fill',  selectLake)
-          map.on('click', 'lakes-border', selectLake)
-
-          ;['rivers-hit', 'rivers-core'].forEach(id => {
-            map.on('mouseenter', id, () => { map.getCanvas().style.cursor = 'pointer' })
-            map.on('mouseleave', id, () => { map.getCanvas().style.cursor = '' })
-          })
-          ;['lakes-fill', 'lakes-border'].forEach(id => {
-            map.on('mouseenter', id, () => { map.getCanvas().style.cursor = 'pointer' })
-            map.on('mouseleave', id, () => { map.getCanvas().style.cursor = '' })
-          })
-
-          // Tap blank map = close
+          // ── UNIFIED CLICK HANDLER ────────────────────────────────
+          // Queries lakes first (priority), then rivers
           map.on('click', (e) => {
-            const hit = map.queryRenderedFeatures(e.point, {
-              layers: ['rivers-hit', 'rivers-core', 'lakes-fill', 'lakes-border'],
-            })
-            if (!hit.length) {
+            const lakeHit  = map.queryRenderedFeatures(e.point, { layers: ['lakes-fill'] })
+            const riverHit = map.queryRenderedFeatures(e.point, { layers: ['rivers-hit', 'rivers-core'] })
+
+            if (lakeHit.length > 0) {
+              const f    = lakeHit[0]
+              const uid  = f.properties._uid
+              const name = f.properties.name_en || f.properties.name || null
+              if (!name) return
+
+              map.setFilter('lakes-selected',  ['==', ['get', '_uid'], uid])
+              map.setFilter('rivers-selected', NONE_FILTER)
+
+              const meta = LAKE_META[name]
+              setSheetType('lake')
+              setSupplyActive(false)
+              setSheet(meta
+                ? { ...meta, name }
+                : { name, status: 'normal', area: '—', states: '—', use: '—',
+                    context: `${name} — data being integrated into NEXUS.` })
+              setSheetFull(false)
+
+            } else if (riverHit.length > 0) {
+              const f    = riverHit[0]
+              const uid  = f.properties._uid
+              const name = f.properties.name_en || f.properties.name || f.properties.namealt || null
+
+              map.setFilter('rivers-selected', ['==', ['get', '_uid'], uid])
+              map.setFilter('lakes-selected',  NONE_FILTER)
+
+              const meta = name ? RIVER_META[name] : null
+              setSheetType('river')
+              setSupplyActive(false)
+              setSheet(meta
+                ? { ...meta, name }
+                : { name: name || 'Unknown River', status: 'normal',
+                    population: '—', length: '—', states: '—', use: '—',
+                    context: `${name || 'This river'} — data being integrated into NEXUS.` })
+              setSheetFull(false)
+
+            } else {
+              // Blank map tap — close everything
               setSheet(null)
               setSupplyActive(false)
-              map.setFilter('rivers-supply',   NONE_FILTER)
-              map.setFilter('rivers-selected', NONE_FILTER)
-              map.setFilter('lakes-selected',  NONE_FILTER)
+              ;['rivers-selected', 'lakes-selected'].forEach(id => {
+                if (map.getLayer(id)) map.setFilter(id, NONE_FILTER)
+              })
             }
           })
 
+          map.on('mouseenter', 'rivers-hit', () => { map.getCanvas().style.cursor = 'pointer' })
+          map.on('mouseleave', 'rivers-hit', () => { map.getCanvas().style.cursor = '' })
+          map.on('mouseenter', 'lakes-fill', () => { map.getCanvas().style.cursor = 'pointer' })
+          map.on('mouseleave', 'lakes-fill', () => { map.getCanvas().style.cursor = '' })
+
           if (mounted) setMapReady(true)
+
         } catch (err) {
           console.error('NEXUS: GeoJSON load failed', err)
         }
@@ -470,7 +410,7 @@ export default function MapView() {
     if (!map) return
     const vis = next[i].on ? 'visible' : 'none'
     const groups = [
-      ['rivers-glow', 'rivers-core', 'rivers-hit', 'rivers-supply', 'rivers-selected'],
+      ['rivers-glow', 'rivers-core', 'rivers-hit', 'rivers-selected'],
       ['lakes-fill', 'lakes-border', 'lakes-selected'],
     ]
     ;(groups[i] || []).forEach(id => {
@@ -483,23 +423,9 @@ export default function MapView() {
     setSupplyActive(false)
     const map = mapRef.current
     if (!map) return
-    ;['rivers-supply', 'rivers-selected', 'lakes-selected'].forEach(id => {
+    ;['rivers-selected', 'lakes-selected'].forEach(id => {
       if (map.getLayer(id)) map.setFilter(id, NONE_FILTER)
     })
-  }
-
-  const toggleSupply = () => {
-    const map = mapRef.current
-    if (!map) return
-    const next = !supplyActive
-    setSupplyActive(next)
-    // When toggled OFF, hide the supply corridor glow
-    if (map.getLayer('rivers-supply')) {
-      map.setPaintProperty('rivers-supply', 'line-opacity', next ? 0.12 : 0)
-    }
-    if (map.getLayer('lakes-selected')) {
-      map.setPaintProperty('lakes-selected', 'fill-opacity', next ? 0.38 : 0)
-    }
   }
 
   const s = sheet
@@ -528,7 +454,6 @@ export default function MapView() {
         fontFamily: 'monospace', color: 'white',
       }}>
 
-        {/* MAP */}
         <div ref={mapContainer} style={{ position: 'absolute', inset: 0 }} />
 
         {/* NAVBAR */}
@@ -538,7 +463,7 @@ export default function MapView() {
           padding: '13px 18px',
           background: 'rgba(2,5,8,0.90)',
           backdropFilter: 'blur(14px)',
-          borderBottom: '1px solid rgba(56,189,248,0.1)',
+          borderBottom: '1px solid rgba(56,189,248,0.10)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '6px', color: '#e2e8f0' }}>
@@ -562,7 +487,7 @@ export default function MapView() {
           position: 'absolute', top: '58px', right: '12px', zIndex: 100,
           background: 'rgba(2,5,12,0.93)',
           backdropFilter: 'blur(14px)',
-          border: '1px solid rgba(56,189,248,0.1)',
+          border: '1px solid rgba(56,189,248,0.10)',
           borderRadius: '10px', padding: '11px 13px', minWidth: '150px',
         }}>
           <div style={{ fontSize: '8px', letterSpacing: '3px', color: '#1e3a5f', marginBottom: '10px' }}>
@@ -618,8 +543,6 @@ export default function MapView() {
             transition: 'height 0.3s cubic-bezier(0.32,0.72,0,1)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
-
-            {/* Handle */}
             <div onClick={() => setSheetFull(f => !f)} style={{
               padding: '10px 0 6px', display: 'flex',
               justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
@@ -655,19 +578,14 @@ export default function MapView() {
               <div style={{
                 background: `${statusColor}0d`,
                 border: `1px solid ${statusColor}33`,
-                borderRadius: '8px', padding: '10px 13px',
-                marginBottom: '12px',
+                borderRadius: '8px', padding: '10px 13px', marginBottom: '12px',
                 display: 'flex', alignItems: 'center', gap: '9px',
               }}>
                 <div className="pulse" style={{
                   width: '9px', height: '9px', borderRadius: '50%',
-                  background: statusColor,
-                  boxShadow: `0 0 10px ${statusColor}`,
+                  background: statusColor, boxShadow: `0 0 10px ${statusColor}`,
                 }} />
-                <span style={{
-                  fontSize: '11px', color: statusColor,
-                  letterSpacing: '2px', fontWeight: 600,
-                }}>
+                <span style={{ fontSize: '11px', color: statusColor, letterSpacing: '2px', fontWeight: 600 }}>
                   {statusLabel.toUpperCase()}
                 </span>
               </div>
@@ -717,10 +635,9 @@ export default function MapView() {
               {/* Primary Uses */}
               {sheet.use && sheet.use !== '—' && (
                 <div style={{ marginBottom: '13px' }}>
-                  <div style={{
-                    fontSize: '8px', color: '#1e3a5f',
-                    letterSpacing: '2.5px', marginBottom: '8px',
-                  }}>PRIMARY USES</div>
+                  <div style={{ fontSize: '8px', color: '#1e3a5f', letterSpacing: '2.5px', marginBottom: '8px' }}>
+                    PRIMARY USES
+                  </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                     {sheet.use.split(' · ').map(u => (
                       <span key={u} style={{
@@ -734,40 +651,22 @@ export default function MapView() {
                 </div>
               )}
 
-              {/* Supply Area Toggle */}
-              <div
-                onClick={toggleSupply}
-                style={{
-                  background: supplyActive
-                    ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.04)',
-                  border: `1px solid rgba(56,189,248,${supplyActive ? '0.4' : '0.18'})`,
-                  borderRadius: '8px', padding: '11px 13px',
-                  marginBottom: '10px',
-                  display: 'flex', justifyContent: 'space-between',
-                  alignItems: 'center', cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
+              {/* Supply Area — honest placeholder */}
+              <div style={{
+                background: 'rgba(56,189,248,0.04)',
+                border: '1px solid rgba(56,189,248,0.14)',
+                borderRadius: '8px', padding: '11px 13px', marginBottom: '10px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
                 <div>
-                  <div style={{
-                    fontSize: '10px',
-                    color: supplyActive ? '#7dd3fc' : '#38bdf8',
-                    letterSpacing: '1.5px', marginBottom: '2px',
-                  }}>
-                    {supplyActive ? '💧 SUPPLY AREA ACTIVE' : '💧 SHOW SUPPLY AREA'}
+                  <div style={{ fontSize: '10px', color: '#38bdf8', letterSpacing: '1.5px', marginBottom: '2px' }}>
+                    💧 SUPPLY WATERSHED
                   </div>
                   <div style={{ fontSize: '9px', color: '#334155' }}>
-                    {supplyActive
-                      ? 'Watershed corridor visible on map'
-                      : 'Highlight watershed served by this source'}
+                    Precise HydroSHEDS polygons — Phase 2
                   </div>
                 </div>
-                <span style={{
-                  fontSize: '13px',
-                  color: supplyActive ? '#38bdf8' : '#1e3a5f',
-                }}>
-                  {supplyActive ? '✓' : '→'}
-                </span>
+                <span style={{ fontSize: '10px', color: '#1e3a5f', letterSpacing: '1px' }}>SOON</span>
               </div>
 
               {/* Advanced Lock */}
@@ -778,10 +677,9 @@ export default function MapView() {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
                 <div>
-                  <div style={{
-                    fontSize: '10px', color: '#ef4444',
-                    letterSpacing: '1.5px', marginBottom: '3px',
-                  }}>🔴 ADVANCED DATA</div>
+                  <div style={{ fontSize: '10px', color: '#ef4444', letterSpacing: '1.5px', marginBottom: '3px' }}>
+                    🔴 ADVANCED DATA
+                  </div>
                   <div style={{ fontSize: '9px', color: '#334155', lineHeight: '1.5' }}>
                     Water rights · Senior/Junior allocation<br />
                     Regulatory friction · 50-year trend charts
@@ -806,11 +704,3 @@ export default function MapView() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <span>NEXUS v0.2 · PHASE 1</span>
-          <span style={{ color: '#22c55e' }}>● LIVE</span>
-          <span>RIVERS · LAKES · US</span>
-        </div>
-
-      </div>
-    </>
-  )
-}
