@@ -704,3 +704,11 @@ export default function MapView() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <span>NEXUS v0.2 · PHASE 1</span>
+          <span style={{ color: '#22c55e' }}>● LIVE</span>
+          <span>RIVERS · LAKES · US</span>
+        </div>
+
+      </div>
+    </>
+  )
+}
