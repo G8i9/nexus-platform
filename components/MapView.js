@@ -246,7 +246,7 @@ export default function MapView() {
           if (!mounted) return
 
           const rivers = addUIDs(filterToUS(await rRes.json(), null))
-          const lakes  = addUIDs(filterToUS(await lRes.json(), 1))
+          const lakes  = addUIDs(filterToUS(await lRes.json(), null))
 
           // ── LAKES ───────────────────────────────────────────────
           map.addSource('lakes', { type: 'geojson', data: lakes })
